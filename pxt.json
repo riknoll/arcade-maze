@@ -1,5 +1,5 @@
 {
-    "name": "my-project",
+    "name": "arcade-maze",
     "version": "0.0.0",
     "files": [
         "main.ts"

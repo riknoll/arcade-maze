@@ -3,25 +3,25 @@
 namespace mazegen {
     export enum Location {
         //% block="anywhere"
-        Anywhere,
+        Anywhere = 0,
         //% block="top left"
-        TopLeft,
+        TopLeft = 1 << 0,
         //% block="top right"
-        TopRight,
+        TopRight = 1 << 1,
         //% block="bottom left"
-        BottomLeft,
+        BottomLeft = 1 << 2,
         //% block="bottom right"
-        BottomRight,
+        BottomRight = 1 << 3,
         //% block="left side"
-        LeftSide,
+        LeftSide = 1 << 4,
         //% block="top side"
-        TopSide,
+        TopSide = 1 << 5,
         //% block="right side"
-        RightSide,
+        RightSide = 1 << 6,
         //% block="bottom side"
-        BottomSide,
+        BottomSide = 1 << 7,
         //% block="center"
-        Center
+        Center = 1 << 8
     }
 
     /**
@@ -29,10 +29,10 @@ namespace mazegen {
      * indicated with pixels of a different color. Transparent pixels indicate
      * walls in the maze
      *
-     * @param width The width of the output image in pixels
-     * @param height The height of the output image in pixels
-     * @param entrance The location for the entrance pixel to be placed
-     * @param exit The location for the entrance pixel to be placed
+     * @param width The width of the output image in pixels. Odd number work best
+     * @param height The height of the output image in pixels. Odd numbers work bet
+     * @param entranceRule The location for the entrance pixel to be placed
+     * @param exitRule The location for the entrance pixel to be placed
      * @param startColor The color of the entrance pixel. This is 7 (green) by default
      * @param endColor The color of the exit pixel. This is 2 (red) by default
      * @param defaultColor The color of all of the filled pixels other than the entrance and exit. This is 1 (white) by default
@@ -40,11 +40,11 @@ namespace mazegen {
      * @returns An image with a maze in it
      */
     //% blockId=mazegen_create
-    //% block="create maze|width $width|height $height||entrance $entrance|exit $exit|entrance color $startColor|exit color $endColor|default color $defaultColor|seed $seed"
-    //% width.defl=10
-    //% height.defl=10
-    //% entrance.shadow=mazegen__location
-    //% exit.shadow=mazegen__location
+    //% block="create maze|width $width|height $height||entrance $entranceRule|exit $exitRule|entrance color $startColor|exit color $endColor|default color $defaultColor|seed $seed"
+    //% width.defl=9
+    //% height.defl=9
+    //% entranceRule.shadow=mazegen__location
+    //% exitRule.shadow=mazegen__location
     //% startColor.shadow=colorindexpicker
     //% startColor.defl=7
     //% endColor.shadow=colorindexpicker
@@ -55,8 +55,8 @@ namespace mazegen {
     export function create(
         width: number,
         height: number,
-        entrance?: number,
-        exit?: number,
+        entranceRule?: number,
+        exitRule?: number,
         startColor?: number,
         endColor?: number,
         defaultColor?: number,
@@ -64,15 +64,15 @@ namespace mazegen {
     ): Image {
         width |= 0;
         height |= 0;
-        if (!entrance) entrance = Location.Anywhere;
-        if (!exit) exit = Location.Anywhere;
+        if (!entranceRule) entranceRule = Location.Anywhere;
+        if (!exitRule) exitRule = Location.Anywhere;
         if (!startColor) startColor = 7;
         if (!endColor) endColor = 2;
         if (!defaultColor) defaultColor = 1;
-        if (seed == null) seed = randint(0, 0xffffff);
+        if (!seed) seed = randint(0, 0xffffff);
 
-        if (entrance === exit) {
-            switch (entrance) {
+        if (entranceRule === exitRule) {
+            switch (entranceRule) {
                 case Location.TopLeft:
                 case Location.TopRight:
                 case Location.BottomLeft:
@@ -82,15 +82,15 @@ namespace mazegen {
             }
         }
 
-        if (width <= 1 || height <= 1) {
+        if (width <= 2 || height <= 2) {
             throw "Invalid width/height";
         }
 
         const random = new Math.FastRandom(seed);
         const result = image.create(width, height);
 
-        const halfWidth = width >> 1;
-        const halfHeight = height >> 1;
+        const halfWidth = Math.ceil(width / 2)
+        const halfHeight = Math.ceil(height / 2);
 
         for (let x = 0; x < halfWidth; x++) {
             for (let y = 0; y < halfHeight; y++) {
@@ -102,13 +102,14 @@ namespace mazegen {
             }
         }
 
-        const start = getEntrance(width, height, entrance, random);
+        const flipEntranceExit = !isExactLocation(entranceRule) && isExactLocation(exitRule)
+        let startLocation = getEntrance(width, height, flipEntranceExit ? exitRule : entranceRule, random);
 
-        const stack: number[] = [start];
+        const stack: number[] = [startLocation];
         let maxDistance = 0;
-        let end = start;
+        let endLocation = startLocation;
 
-        result.setPixel(XX(start) << 1, YY(start) << 1, 2);
+        result.setPixel(XX(startLocation) << 1, YY(startLocation) << 1, 2);
 
         const checkLocation = (current: number, dx: number, dy: number) => {
             const next = pack(XX(current) + dx, YY(current) + dy, ZZ(current) + 1);
@@ -119,9 +120,9 @@ namespace mazegen {
                 stack.push(current);
                 stack.push(next);
 
-                if (validExit(next, width, height, exit) && ZZ(next) > maxDistance) {
+                if (validExit(next, width, height, flipEntranceExit ? entranceRule : exitRule) && ZZ(next) > maxDistance) {
                     maxDistance = ZZ(next);
-                    end = next;
+                    endLocation = next;
                 }
                 return true;
             }
@@ -150,10 +151,104 @@ namespace mazegen {
             }
         }
 
+        let flip = 0;
+        if (!(width & 1)) {
+            for (let y = 0; y < height; y += 2) {
+                if (result.getPixel(width - 2, y)) {
+                    if (
+                        result.getPixel(width - 2, y + 1) &&
+                        result.getPixel(width - 2, y + 2)
+                    ) {
+                        if (random.percentChance(80)) {
+                            flip++
+                        }
+                        if ((flip % 3) === 0) {
+                            result.setPixel(width - 1, y, defaultColor)
+                            result.setPixel(width - 2, y + 1, 0)
+                            result.setPixel(width - 1, y + 1, defaultColor)
+                            result.setPixel(width - 1, y + 2, defaultColor)
+                            continue;
+                        }
+                    }
+
+                    result.setPixel(width - 1, y, defaultColor)
+                }
+            }
+        }
+
+        if (!(height & 1)) {
+            for (let x = 0; x < width; x += 2) {
+                if (result.getPixel(x, height - 2)) {
+                    if (
+                        result.getPixel(x + 1, height - 2) &&
+                        result.getPixel(x + 2, height - 2)
+                    ) {
+                        if (random.percentChance(80)) {
+                            flip++
+                        }
+                        if ((flip % 3) === 0) {
+                            result.setPixel(x, height - 1, defaultColor)
+                            result.setPixel(x + 1, height - 2, 0)
+                            result.setPixel(x + 1, height - 1, defaultColor)
+                            result.setPixel(x + 2, height - 1, defaultColor)
+                            continue;
+                        }
+                    }
+
+                    result.setPixel(x, height - 1, defaultColor)
+                }
+            }
+        }
+
         result.replace(2, 1);
         result.replace(1, defaultColor);
-        result.setPixel(XX(start) << 1, YY(start) << 1, startColor);
-        result.setPixel(XX(end) << 1, YY(end) << 1, endColor);
+
+        if (flipEntranceExit) {
+            const swap = startLocation;
+            startLocation = endLocation;
+            endLocation = swap;
+        }
+
+        let entranceX = XX(startLocation) << 1;
+        let entranceY = YY(startLocation) << 1;
+        let exitX = XX(endLocation) << 1;
+        let exitY = YY(endLocation) << 1;
+
+
+        if (
+            !(width & 1) &&
+            isOnRightSide(entranceRule) &&
+            result.getPixel(entranceX + 1, entranceY)
+        ) {
+            entranceX++;
+        }
+
+        if (
+            !(height & 1) &&
+            isOnBottomSide(entranceRule) &&
+            result.getPixel(entranceX, entranceY + 1)
+        ) {
+            entranceY++;
+        }
+
+        if (
+            !(width & 1) &&
+            isOnRightSide(exitRule) &&
+            result.getPixel(exitX + 1, exitY)
+        ) {
+            exitX++;
+        }
+
+        if (
+            !(height & 1) &&
+            isOnBottomSide(exitRule) &&
+            result.getPixel(exitX, exitY + 1)
+        ) {
+            exitY++;
+        }
+
+        result.setPixel(entranceX, entranceY, startColor);
+        result.setPixel(exitX, exitY, endColor);
 
         return result;
     }
@@ -174,8 +269,8 @@ namespace mazegen {
     function ZZ(x: number) { return x >> 16 }
 
     function getEntrance(width: number, height: number, location: Location, random: Math.FastRandom) {
-        const maxX = (width >> 1) - 1;
-        const maxY = (height >> 1) - 1;
+        const maxX = Math.ceil(width / 2) - 1;
+        const maxY = Math.ceil(height / 2) - 1;
         const randX = random.randomRange(0, maxX);
         const randY = random.randomRange(0, maxY);
 
@@ -198,14 +293,15 @@ namespace mazegen {
                 return pack(maxX, randY, 0);
             case Location.BottomSide:
                 return pack(randX, maxY, 0);
-            case Location.Center :
+            case Location.Center:
                 return pack(maxX >> 1, maxY >> 1, 0);
         }
+        return 0;
     }
 
     function validExit(loc: number, width: number, height: number, location: Location) {
-        const maxX = (width >> 1) - 1;
-        const maxY = (height >> 1) - 1;
+        const maxX = Math.ceil(width / 2) - 1;
+        const maxY = Math.ceil(height / 2) - 1;
 
         switch (location) {
             case Location.Anywhere:
@@ -229,5 +325,18 @@ namespace mazegen {
             case Location.Center:
                 return XX(loc) === maxX >> 1 && YY(loc) === maxY >> 1;
         }
+        return false;
+    }
+
+    function isOnRightSide(location: Location) {
+        return !!(location & (Location.TopRight | Location.BottomRight | Location.RightSide));
+    }
+
+    function isOnBottomSide(location: Location) {
+        return !!(location & (Location.BottomLeft | Location.BottomRight | Location.BottomSide));
+    }
+
+    function isExactLocation(location: Location) {
+        return !!(location & (Location.TopLeft | Location.TopRight | Location.BottomLeft | Location.BottomRight | Location.Center))
     }
 }
