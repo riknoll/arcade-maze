@@ -1,3 +1,5 @@
+//% block=Maze
+//% color="#6e231e"
 namespace mazegen {
     export enum Location {
         //% block="anywhere"
@@ -22,10 +24,34 @@ namespace mazegen {
         Center
     }
 
+    /**
+     * Generates an Image that contains a maze. The entrance and exit will be
+     * indicated with pixels of a different color. Transparent pixels indicate
+     * walls in the maze
+     *
+     * @param width The width of the output image in pixels
+     * @param height The height of the output image in pixels
+     * @param entrance The location for the entrance pixel to be placed
+     * @param exit The location for the entrance pixel to be placed
+     * @param startColor The color of the entrance pixel. This is 7 (green) by default
+     * @param endColor The color of the exit pixel. This is 2 (red) by default
+     * @param defaultColor The color of all of the filled pixels other than the entrance and exit. This is 1 (white) by default
+     * @param seed A seed to be placed
+     * @returns An image with a maze in it
+     */
     //% blockId=mazegen_create
     //% block="create maze|width $width|height $height||entrance $entrance|exit $exit|entrance color $startColor|exit color $endColor|default color $defaultColor|seed $seed"
+    //% width.defl=10
+    //% height.defl=10
     //% entrance.shadow=mazegen__location
     //% exit.shadow=mazegen__location
+    //% startColor.shadow=colorindexpicker
+    //% startColor.defl=7
+    //% endColor.shadow=colorindexpicker
+    //% endColor.defl=2
+    //% defaultColor.shadow=colorindexpicker
+    //% defaultColor.defl=1
+    //% weigt=100
     export function create(
         width: number,
         height: number,
